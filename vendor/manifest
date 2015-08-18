@@ -1,0 +1,17 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/onsi/ginkgo",
+			"repository": "https://github.com/onsi/ginkgo",
+			"revision": "d94e2f4000332f62b356ecb2840c98f4218f5358",
+			"branch": "master"
+		},
+		{
+			"importpath": "github.com/onsi/gomega",
+			"repository": "https://github.com/onsi/gomega",
+			"revision": "a2ab8644e0b6a33df2cbe44673bd0f6ebba9abc3",
+			"branch": "master"
+		}
+	]
+}
