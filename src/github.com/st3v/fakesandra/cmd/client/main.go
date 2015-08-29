@@ -17,15 +17,22 @@ func main() {
 			continue
 		}
 
-		err = session.Query(`
+		session.SetPageSize(123)
+		session.SetConsistency(gocql.LocalQuorum)
+
+		qry := session.Query(`
 			CREATE KEYSPACE foo 
 			WITH REPLICATION {
 				'class': 'SimpleStrategy', 
-				'replication_factor': 3,
+				'replication_factor': 3
 			}`,
-		).Exec()
+			"foo",
+			"bar",
+		)
 
-		if err != nil {
+		// qry.Consistency(gocql.Any).PageSize(987)
+		qry.SerialConsistency(gocql.LocalSerial)
+		if err := qry.Exec(); err != nil {
 			log.Printf("Error executing query: %s\n", err.Error())
 		}
 	}

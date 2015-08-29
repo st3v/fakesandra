@@ -5,12 +5,35 @@ import (
 	"io"
 )
 
+// Specification can be found under:
+// https://github.com/apache/cassandra/blob/trunk/doc/native_protocol_v3.spec
+
 const (
 	versionRequest  = 0x03
 	versionResponse = 0x83
 )
 
 type opcode uint8
+
+const (
+	opError opcode = iota
+	opStartup
+	opReady
+	opAuthenticate
+	_ // DEPRECATED
+	opOptions
+	opSupported
+	opQuery
+	opResult
+	opPrepare
+	opExecute
+	opRegister
+	opEvent
+	opBatch
+	opAuthChallenge
+	opAuthResponse
+	opAuthSuccess
+)
 
 type header struct {
 	Flags    uint8

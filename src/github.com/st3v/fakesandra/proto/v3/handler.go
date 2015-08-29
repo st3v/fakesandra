@@ -6,27 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strings"
-)
-
-const (
-	opError opcode = iota
-	opStartup
-	opReady
-	opAuthenticate
-	deprecated
-	opOptions
-	opSupported
-	opQuery
-	opResult
-	opPrepare
-	opExecute
-	opRegister
-	opEvent
-	opBatch
-	opAuthChallenge
-	opAuthResponse
-	opAuthSuccess
 )
 
 func Handle(rw io.ReadWriter) error {
@@ -53,8 +32,8 @@ func Handle(rw io.ReadWriter) error {
 type framer func(frame) (frame, error)
 
 var framers = map[opcode]framer{
-	opStartup: startup,
-	opQuery:   query,
+	opStartup: startupHandler,
+	opQuery:   queryHandler,
 }
 
 func handleFrame(f frame) (frame, error) {
@@ -66,24 +45,30 @@ func handleFrame(f frame) (frame, error) {
 	return framer(f)
 }
 
-func startup(f frame) (frame, error) {
+func startupHandler(f frame) (frame, error) {
 	log.Println("Received STARTUP request")
-	return ready(f.header.StreamID), nil
+	return readyResponse(f.header.StreamID), nil
 }
 
-func query(f frame) (frame, error) {
-	log.Printf("Received QUERY request: %s", strings.Trim(string(f.body), " \r\n"))
-	return void(f.header.StreamID), nil
+func queryHandler(f frame) (frame, error) {
+	var qry query
+	if err := readQuery(bytes.NewReader(f.body), &qry); err != nil {
+		return frame{}, err
+	}
+
+	log.Printf("Received QUERY request: %s", qry)
+
+	return voidResponse(f.header.StreamID), nil
 }
 
-func void(streamID uint16) frame {
+func voidResponse(streamID uint16) frame {
 	log.Println("Sending VOID response")
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, uint32(1))
 	return response(streamID, opResult, buf.Bytes())
 }
 
-func ready(streamID uint16) frame {
+func readyResponse(streamID uint16) frame {
 	log.Println("Sending READY response")
 	return response(streamID, opReady, []byte{})
 }
