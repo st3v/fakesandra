@@ -2,6 +2,7 @@ package v3
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -9,52 +10,57 @@ import (
 	"time"
 )
 
-type consistency uint16
+type Consistency uint16
 
 const (
-	cAny consistency = iota
-	cOne
-	cTwo
-	cThree
-	cQuorum
-	cAll
-	cLocalQuorum
-	cEachQuorum
-	cSerial
-	cLocalSerial
-	cLocalOne
+	Any Consistency = iota
+	One
+	Two
+	Three
+	Quorum
+	All
+	LocalQuorum
+	EachQuorum
+	Serial
+	LocalSerial
+	LocalOne
 )
 
-func (c consistency) String() string {
+func (c Consistency) String() string {
 	switch c {
-	case cAny:
+	case Any:
 		return "ANY"
-	case cOne:
+	case One:
 		return "ONE"
-	case cTwo:
+	case Two:
 		return "TWO"
-	case cThree:
+	case Three:
 		return "THREE"
-	case cQuorum:
+	case Quorum:
 		return "QUORUM"
-	case cAll:
+	case All:
 		return "ALL"
-	case cLocalQuorum:
+	case LocalQuorum:
 		return "LOCAL_QUORUM"
-	case cEachQuorum:
+	case EachQuorum:
 		return "EACH_QUORUM"
-	case cSerial:
+	case Serial:
 		return "SERIAL"
-	case cLocalSerial:
+	case LocalSerial:
 		return "LOCAL_SERIAL"
-	case cLocalOne:
+	case LocalOne:
 		return "LOCAL_SERIAL"
 	default:
 		return "UNKNOWN"
 	}
 }
 
+var (
+	errMaxLenExceeded = errors.New("Exceeds maximum length")
+)
+
 type queryFlagSet uint8
+
 type queryFlag uint8
 
 const (
@@ -109,23 +115,23 @@ var queryFlagNames = map[queryFlag]string{
 	qryNames:             "WITH_NAMES",
 }
 
-type query struct {
-	stmt              string
-	consistency       consistency
+type Query struct {
+	Statement         string
+	Consistency       Consistency
 	flagSet           queryFlagSet
 	values            [][]byte
 	valueNames        []string
 	pageSize          int32
 	pagingState       []byte
-	serialConsistency consistency
+	serialConsistency Consistency
 	defaultTimestamp  time.Time
 }
 
-func (q query) Values() ([][]byte, bool) {
+func (q Query) Values() ([][]byte, bool) {
 	return q.values, q.flagSet.Contains(qryValues)
 }
 
-func (q query) NamedValues() (map[string][]byte, bool) {
+func (q Query) NamedValues() (map[string][]byte, bool) {
 	nv := map[string][]byte{}
 
 	for i, name := range q.valueNames {
@@ -135,25 +141,25 @@ func (q query) NamedValues() (map[string][]byte, bool) {
 	return nv, q.flagSet.Contains(qryNames) && q.flagSet.Contains(qryValues)
 }
 
-func (q query) PageSize() (int32, bool) {
+func (q Query) PageSize() (int32, bool) {
 	return q.pageSize, q.flagSet.Contains(qryPageSize)
 }
 
-func (q query) PagingState() ([]byte, bool) {
+func (q Query) PagingState() ([]byte, bool) {
 	return q.pagingState, q.flagSet.Contains(qryPagingState)
 }
 
-func (q query) SerialConsistency() (consistency, bool) {
+func (q Query) SerialConsistency() (Consistency, bool) {
 	return q.serialConsistency, q.flagSet.Contains(qrySerialConsistency)
 }
 
-func (q query) DefaultTimestamp() (time.Time, bool) {
+func (q Query) DefaultTimestamp() (time.Time, bool) {
 	return q.defaultTimestamp, q.flagSet.Contains(qryDefaultTimestamp)
 }
 
-func (q query) TrimmedStatement() string {
+func (q Query) TrimmedStatement() string {
 	newlines := regexp.MustCompile(`[\r\n]`)
-	stmt := newlines.ReplaceAllString(q.stmt, " ")
+	stmt := newlines.ReplaceAllString(q.Statement, " ")
 
 	spaces := regexp.MustCompile(`[\s\t]+`)
 	stmt = spaces.ReplaceAllString(stmt, " ")
@@ -161,10 +167,10 @@ func (q query) TrimmedStatement() string {
 	return strings.Trim(stmt, " ")
 }
 
-func (q query) String() string {
+func (q Query) String() string {
 	fields := []string{
 		fmt.Sprintf(`Statement: "%s"`, q.TrimmedStatement()),
-		fmt.Sprintf(`Consistency: "%s"`, q.consistency),
+		fmt.Sprintf(`Consistency: "%s"`, q.Consistency),
 		fmt.Sprintf(`Flags: "%s"`, q.flagSet),
 	}
 
@@ -173,7 +179,7 @@ func (q query) String() string {
 	}
 
 	if ps, set := q.PagingState(); set {
-		fields = append(fields, fmt.Sprintf(`PageStateLength: %d`, len(ps)))
+		fields = append(fields, fmt.Sprintf(`PagingStateLength: %d`, len(ps)))
 	}
 
 	if sc, set := q.SerialConsistency(); set {
@@ -185,6 +191,94 @@ func (q query) String() string {
 	}
 
 	return fmt.Sprintf("Query [ %s ]", strings.Join(fields, ", "))
+}
+
+func readQuery(r io.Reader, q *Query) error {
+	var err error
+	if q.Statement, err = readLongString(r); err != nil {
+		return err
+	}
+
+	if err := readConsistency(r, &q.Consistency); err != nil {
+		return err
+	}
+
+	if err := binary.Read(r, binary.BigEndian, &q.flagSet); err != nil {
+		return err
+	}
+
+	if q.values, q.valueNames, err = readValues(r, q.flagSet); err != nil {
+		return err
+	}
+
+	if err := readPageSize(r, q.flagSet, &q.pageSize); err != nil {
+		return err
+	}
+
+	if q.pagingState, err = readPagingState(r, q.flagSet); err != nil {
+		return err
+	}
+
+	if err := readSerialConsistency(r, q.flagSet, &q.serialConsistency); err != nil {
+		return err
+	}
+
+	if q.defaultTimestamp, err = readDefaultTimestamp(r, q.flagSet); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeByte(w io.Writer, n uint8) error {
+	_, err := w.Write([]byte{n})
+	return err
+}
+
+func writeShort(w io.Writer, n uint16) error {
+	return binary.Write(w, binary.BigEndian, n)
+}
+
+func writeInt(w io.Writer, n int32) error {
+	return binary.Write(w, binary.BigEndian, n)
+}
+
+func writeLong(w io.Writer, n int64) error {
+	return binary.Write(w, binary.BigEndian, n)
+}
+
+func writeShortBytes(w io.Writer, b []byte) error {
+	if len(b) > 1<<16-1 {
+		return errMaxLenExceeded
+	}
+
+	if err := writeShort(w, uint16(len(b))); err != nil {
+		return err
+	}
+
+	_, err := w.Write(b)
+	return err
+}
+
+func writeBytes(w io.Writer, b []byte) error {
+	if len(b) > 1<<32-1 {
+		return errMaxLenExceeded
+	}
+
+	if err := writeInt(w, int32(len(b))); err != nil {
+		return err
+	}
+
+	_, err := w.Write(b)
+	return err
+}
+
+func writeString(w io.Writer, str string) error {
+	return writeShortBytes(w, []byte(str))
+}
+
+func writeLongString(w io.Writer, str string) error {
+	return writeBytes(w, []byte(str))
 }
 
 func readByte(r io.Reader, n *uint8) error {
@@ -241,45 +335,8 @@ func readLongString(r io.Reader) (string, error) {
 	return string(str), err
 }
 
-func readConsistency(r io.Reader, c *consistency) error {
+func readConsistency(r io.Reader, c *Consistency) error {
 	return binary.Read(r, binary.BigEndian, c)
-}
-
-func readQuery(r io.Reader, q *query) error {
-	var err error
-	if q.stmt, err = readLongString(r); err != nil {
-		return err
-	}
-
-	if err := readConsistency(r, &q.consistency); err != nil {
-		return err
-	}
-
-	if err := binary.Read(r, binary.BigEndian, &q.flagSet); err != nil {
-		return err
-	}
-
-	if q.values, q.valueNames, err = readValues(r, q.flagSet); err != nil {
-		return err
-	}
-
-	if err := readPageSize(r, q.flagSet, &q.pageSize); err != nil {
-		return err
-	}
-
-	if q.pagingState, err = readPagingState(r, q.flagSet); err != nil {
-		return err
-	}
-
-	if err := readSerialConsistency(r, q.flagSet, &q.serialConsistency); err != nil {
-		return err
-	}
-
-	if q.defaultTimestamp, err = readDefaultTimestamp(r, q.flagSet); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func readValues(r io.Reader, fs queryFlagSet) ([][]byte, []string, error) {
@@ -329,7 +386,7 @@ func readPagingState(r io.Reader, fs queryFlagSet) ([]byte, error) {
 	return readBytes(r)
 }
 
-func readSerialConsistency(r io.Reader, fs queryFlagSet, c *consistency) error {
+func readSerialConsistency(r io.Reader, fs queryFlagSet, c *Consistency) error {
 	if !fs.Contains(qrySerialConsistency) {
 		return nil
 	}

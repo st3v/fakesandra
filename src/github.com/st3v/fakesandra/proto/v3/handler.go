@@ -51,7 +51,7 @@ func startupHandler(f frame) (frame, error) {
 }
 
 func queryHandler(f frame) (frame, error) {
-	var qry query
+	var qry Query
 	if err := readQuery(bytes.NewReader(f.body), &qry); err != nil {
 		return frame{}, err
 	}
