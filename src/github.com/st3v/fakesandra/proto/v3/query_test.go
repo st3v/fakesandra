@@ -68,6 +68,11 @@ var _ = Describe("readQuery", func() {
 				Expect(set).To(BeFalse())
 			})
 
+			It("does not set the skip metadata option", func() {
+				skip := query.SkipMetadata()
+				Expect(skip).To(BeFalse())
+			})
+
 			It("does not set the page size option", func() {
 				_, set := query.PageSize()
 				Expect(set).To(BeFalse())
@@ -86,6 +91,18 @@ var _ = Describe("readQuery", func() {
 			It("does not set the default timestamp", func() {
 				_, set := query.DefaultTimestamp()
 				Expect(set).To(BeFalse())
+			})
+		})
+
+		Context("when skip metadata is set", func() {
+			BeforeEach(func() {
+				err = writeByte(buf, uint8(qrySkipMeta))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("correctly parses the skip metadata option", func() {
+				skip := query.SkipMetadata()
+				Expect(skip).To(BeTrue())
 			})
 		})
 

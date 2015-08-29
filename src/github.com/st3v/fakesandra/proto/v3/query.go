@@ -141,6 +141,10 @@ func (q Query) NamedValues() (map[string][]byte, bool) {
 	return nv, q.flagSet.Contains(qryNames) && q.flagSet.Contains(qryValues)
 }
 
+func (q Query) SkipMetadata() bool {
+	return q.flagSet.Contains(qrySkipMeta)
+}
+
 func (q Query) PageSize() (int32, bool) {
 	return q.pageSize, q.flagSet.Contains(qryPageSize)
 }
@@ -172,6 +176,7 @@ func (q Query) String() string {
 		fmt.Sprintf(`Statement: "%s"`, q.TrimmedStatement()),
 		fmt.Sprintf(`Consistency: "%s"`, q.Consistency),
 		fmt.Sprintf(`Flags: "%s"`, q.flagSet),
+		fmt.Sprintf(`SkipMetadata: %t`, q.SkipMetadata()),
 	}
 
 	if ps, set := q.PageSize(); set {
