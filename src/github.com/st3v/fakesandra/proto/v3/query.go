@@ -151,41 +151,40 @@ func (q query) DefaultTimestamp() (time.Time, bool) {
 	return q.defaultTimestamp, q.flagSet.Contains(qryDefaultTimestamp)
 }
 
-func (q query) String() string {
-	format := `Query [ Statement: "%s", Consistency: "%s", Flags: "%s"%s ]`
-
-	optional := []string{}
-
-	if ps, set := q.PageSize(); set {
-		optional = append(optional, fmt.Sprintf(`PageSize: "%d"`, ps))
-	}
-
-	if ps, set := q.PagingState(); set {
-		optional = append(optional, fmt.Sprintf(`PageStateLen: "%d"`, len(ps)))
-	}
-
-	if sc, set := q.SerialConsistency(); set {
-		optional = append(optional, fmt.Sprintf(`SerialConsistency: "%s"`, sc))
-	}
-
-	if ts, set := q.DefaultTimestamp(); set {
-		optional = append(optional, fmt.Sprintf(`DefaultTimestamp: "%s"`, ts))
-	}
-
+func (q query) TrimmedStatement() string {
 	newlines := regexp.MustCompile(`[\r\n]`)
 	stmt := newlines.ReplaceAllString(q.stmt, " ")
 
 	spaces := regexp.MustCompile(`[\s\t]+`)
 	stmt = spaces.ReplaceAllString(stmt, " ")
 
-	stmt = strings.Trim(stmt, " ")
+	return strings.Trim(stmt, " ")
+}
 
-	options := strings.Join(optional, ", ")
-	if options != "" {
-		options = ", " + options
+func (q query) String() string {
+	fields := []string{
+		fmt.Sprintf(`Statement: "%s"`, q.TrimmedStatement()),
+		fmt.Sprintf(`Consistency: "%s"`, q.consistency),
+		fmt.Sprintf(`Flags: "%s"`, q.flagSet),
 	}
 
-	return fmt.Sprintf(format, stmt, q.consistency, q.flagSet, options)
+	if ps, set := q.PageSize(); set {
+		fields = append(fields, fmt.Sprintf(`PageSize: %d`, ps))
+	}
+
+	if ps, set := q.PagingState(); set {
+		fields = append(fields, fmt.Sprintf(`PageStateLength: %d`, len(ps)))
+	}
+
+	if sc, set := q.SerialConsistency(); set {
+		fields = append(fields, fmt.Sprintf(`SerialConsistency: "%s"`, sc))
+	}
+
+	if ts, set := q.DefaultTimestamp(); set {
+		fields = append(fields, fmt.Sprintf(`DefaultTimestamp: "%s"`, ts))
+	}
+
+	return fmt.Sprintf("Query [ %s ]", strings.Join(fields, ", "))
 }
 
 func readByte(r io.Reader, n *uint8) error {
