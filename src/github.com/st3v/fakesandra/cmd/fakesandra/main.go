@@ -2,27 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
 
-	"github.com/st3v/fakesandra/proto"
+	"github.com/st3v/fakesandra/cql"
 )
 
 func main() {
 	fmt.Println("Work in Progress!")
-
-	l, err := net.Listen("tcp", ":9042")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer l.Close()
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		go proto.Dispatch(conn)
+	if err := cql.ListenAndServe(":9042"); err != nil {
+		panic(err)
 	}
 }

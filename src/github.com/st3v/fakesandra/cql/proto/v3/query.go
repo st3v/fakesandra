@@ -1,7 +1,6 @@
 package v3
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"regexp"
@@ -160,7 +159,7 @@ func readQuery(r io.Reader, q *Query) error {
 		return err
 	}
 
-	if err := binary.Read(r, binary.BigEndian, &q.flagSet); err != nil {
+	if err := proto.ReadBinary(r, &q.flagSet); err != nil {
 		return err
 	}
 

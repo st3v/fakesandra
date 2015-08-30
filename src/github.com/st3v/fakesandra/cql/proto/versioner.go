@@ -1,6 +1,9 @@
-package cql
+package proto
 
 import "io"
+
+// VersionDir represents the version AND direction of a CQL frame.
+type VersionDir uint8
 
 const (
 	directionMask VersionDir = 0x80
@@ -8,6 +11,12 @@ const (
 
 type versioner struct {
 	framers map[VersionDir]Framer
+}
+
+func NewVersioner() *versioner {
+	return &versioner{
+		framers: map[VersionDir]Framer{},
+	}
 }
 
 func (v *versioner) Version(in io.Reader) (Framer, error) {

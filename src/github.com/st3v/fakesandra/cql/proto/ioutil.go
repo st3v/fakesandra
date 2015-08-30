@@ -5,21 +5,25 @@ import (
 	"io"
 )
 
+func WriteBinary(w io.Writer, data interface{}) error {
+	return binary.Write(w, binary.BigEndian, data)
+}
+
 func WriteByte(w io.Writer, n uint8) error {
 	_, err := w.Write([]byte{n})
 	return err
 }
 
 func WriteShort(w io.Writer, n uint16) error {
-	return binary.Write(w, binary.BigEndian, n)
+	return WriteBinary(w, n)
 }
 
 func WriteInt(w io.Writer, n int32) error {
-	return binary.Write(w, binary.BigEndian, n)
+	return WriteBinary(w, n)
 }
 
 func WriteLong(w io.Writer, n int64) error {
-	return binary.Write(w, binary.BigEndian, n)
+	return WriteBinary(w, n)
 }
 
 func WriteShortBytes(w io.Writer, b []byte) error {
@@ -56,20 +60,24 @@ func WriteLongString(w io.Writer, str string) error {
 	return WriteBytes(w, []byte(str))
 }
 
+func ReadBinary(r io.Reader, data interface{}) error {
+	return binary.Read(r, binary.BigEndian, data)
+}
+
 func ReadByte(r io.Reader, n *uint8) error {
-	return binary.Read(r, binary.BigEndian, n)
+	return ReadBinary(r, n)
 }
 
 func ReadShort(r io.Reader, n *uint16) error {
-	return binary.Read(r, binary.BigEndian, n)
+	return ReadBinary(r, n)
 }
 
 func ReadInt(r io.Reader, n *int32) error {
-	return binary.Read(r, binary.BigEndian, n)
+	return ReadBinary(r, n)
 }
 
 func ReadLong(r io.Reader, n *int64) error {
-	return binary.Read(r, binary.BigEndian, n)
+	return ReadBinary(r, n)
 }
 
 func ReadBytes(r io.Reader) ([]byte, error) {
@@ -111,5 +119,22 @@ func ReadLongString(r io.Reader) (string, error) {
 }
 
 func ReadConsistency(r io.Reader, c *Consistency) error {
-	return binary.Read(r, binary.BigEndian, c)
+	return ReadBinary(r, c)
+}
+
+func readVersionDir(r io.Reader, v *VersionDir) error {
+	return binary.Read(r, binary.BigEndian, v)
+}
+
+type frameWriter struct {
+	out io.Writer
+}
+
+func FrameWriter(w io.Writer) *frameWriter {
+	return &frameWriter{w}
+}
+
+func (fw *frameWriter) Write(f Frame) error {
+	_, err := f.WriteTo(fw.out)
+	return err
 }

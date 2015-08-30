@@ -1,56 +1,81 @@
 package v3
 
 import (
-	"encoding/binary"
 	"io"
+
+	"github.com/st3v/fakesandra/cql/proto"
 )
 
 // Specification for CQL protocol v3 can be found under:
 // https://github.com/apache/cassandra/blob/trunk/doc/native_protocol_v3.spec
 
 const (
-	version  uint8 = 3
-	request  uint8 = 0x00
-	response uint8 = 0x80
+	Version   proto.Version    = 3
+	request   proto.VersionDir = 0x00
+	response  proto.VersionDir = 0x80
+	headerLen                  = 9
 )
-
-type opcode uint8
 
 type header struct {
 	Flags    uint8
 	StreamID uint16
-	Opcode   opcode
+	Opcode   proto.Opcode
 	Length   uint32
 }
 
 type frame struct {
-	version uint8
-	header  header
-	body    []byte
+	versionDir proto.VersionDir
+	header     header
+	body       []byte
+}
+
+func (f *frame) QueryHandler() proto.HandlerFunc {
+	return queryHandler
+}
+
+func (f *frame) Version() proto.Version {
+	return proto.Version(Version)
+}
+
+func (f *frame) Response() bool {
+	return f.versionDir&response == response
+}
+
+func (f *frame) Request() bool {
+	return !f.Response()
+}
+
+func (f *frame) Opcode() proto.Opcode {
+	return f.header.Opcode
+}
+
+func (f *frame) Body() []byte {
+	return f.body
+}
+
+func (f *frame) WriteTo(w io.Writer) (int64, error) {
+	return writeFrame(w, f)
 }
 
 type framer struct {
-	direction uint8
-	version   uint8
+	direction proto.VersionDir
 }
 
 func RequestFramer() *framer {
 	return &framer{
-		version:   version,
 		direction: request,
 	}
 }
 
 func ResponseFramer() *framer {
 	return &framer{
-		version:   version,
 		direction: response,
 	}
 }
 
-func (f *framer) Frame(r io.Reader) (*frame, error) {
+func (f *framer) Frame(r io.Reader) (proto.Frame, error) {
 	frame := &frame{
-		version: f.direction | f.version,
+		versionDir: f.direction | proto.VersionDir(Version),
 	}
 
 	if err := readFrame(r, frame); err != nil {
@@ -61,7 +86,7 @@ func (f *framer) Frame(r io.Reader) (*frame, error) {
 }
 
 func readFrame(in io.Reader, f *frame) error {
-	if err := binary.Read(in, binary.BigEndian, &f.header); err != nil {
+	if err := proto.ReadBinary(in, &f.header); err != nil {
 		return err
 	}
 
@@ -71,4 +96,20 @@ func readFrame(in io.Reader, f *frame) error {
 	}
 
 	return nil
+}
+
+func writeFrame(out io.Writer, f *frame) (int64, error) {
+	var n int64 = 0
+	if err := proto.WriteBinary(out, f.versionDir); err != nil {
+		return n, err
+	}
+	n += 1
+
+	if err := proto.WriteBinary(out, f.header); err != nil {
+		return n, err
+	}
+	n += headerLen
+
+	m, err := out.Write(f.body)
+	return n + int64(m), err
 }
