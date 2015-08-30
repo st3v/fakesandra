@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/st3v/fakesandra/cql/proto"
 )
 
 var _ = Describe("readQuery", func() {
@@ -23,7 +24,7 @@ var _ = Describe("readQuery", func() {
 	Context("when there is a query to read", func() {
 		var (
 			stmt        = "SOME STATEMENT"
-			consistency = LocalOne
+			consistency = proto.LocalOne
 		)
 
 		BeforeEach(func() {
@@ -31,18 +32,18 @@ var _ = Describe("readQuery", func() {
 			buf = bytes.NewBuffer([]byte{})
 
 			// write statement
-			err := writeLongString(buf, stmt)
+			err := proto.WriteLongString(buf, stmt)
 			Expect(err).ToNot(HaveOccurred())
 
 			// write consistency
-			err = writeShort(buf, uint16(consistency))
+			err = proto.WriteShort(buf, uint16(consistency))
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Context("when there are no query flags", func() {
 			BeforeEach(func() {
 				// write empty flag set
-				err = writeByte(buf, uint8(0))
+				err = proto.WriteByte(buf, uint8(0))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -96,7 +97,7 @@ var _ = Describe("readQuery", func() {
 
 		Context("when skip metadata is set", func() {
 			BeforeEach(func() {
-				err = writeByte(buf, uint8(qrySkipMeta))
+				err = proto.WriteByte(buf, uint8(qrySkipMeta))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -110,10 +111,10 @@ var _ = Describe("readQuery", func() {
 			var pageSize = int32(12345)
 
 			BeforeEach(func() {
-				err = writeByte(buf, uint8(qryPageSize))
+				err = proto.WriteByte(buf, uint8(qryPageSize))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = writeInt(buf, pageSize)
+				err = proto.WriteInt(buf, pageSize)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -128,10 +129,10 @@ var _ = Describe("readQuery", func() {
 			var pagingState = []byte("FOOBAR")
 
 			BeforeEach(func() {
-				err = writeByte(buf, uint8(qryPagingState))
+				err = proto.WriteByte(buf, uint8(qryPagingState))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = writeBytes(buf, pagingState)
+				err = proto.WriteBytes(buf, pagingState)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -143,13 +144,13 @@ var _ = Describe("readQuery", func() {
 		})
 
 		Context("when serial consistency is set", func() {
-			var serialConsistency = LocalSerial
+			var serialConsistency = proto.LocalSerial
 
 			BeforeEach(func() {
-				err = writeByte(buf, uint8(qrySerialConsistency))
+				err = proto.WriteByte(buf, uint8(qrySerialConsistency))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = writeShort(buf, uint16(serialConsistency))
+				err = proto.WriteShort(buf, uint16(serialConsistency))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -167,10 +168,10 @@ var _ = Describe("readQuery", func() {
 			)
 
 			BeforeEach(func() {
-				err = writeByte(buf, uint8(qryDefaultTimestamp))
+				err = proto.WriteByte(buf, uint8(qryDefaultTimestamp))
 				Expect(err).ToNot(HaveOccurred())
 
-				err = writeLong(buf, microSeconds)
+				err = proto.WriteLong(buf, microSeconds)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -189,16 +190,16 @@ var _ = Describe("readQuery", func() {
 
 			BeforeEach(func() {
 				// write flagSet
-				err = writeByte(buf, uint8(flagSet))
+				err = proto.WriteByte(buf, uint8(flagSet))
 				Expect(err).ToNot(HaveOccurred())
 
 				// write number of values
-				err = writeShort(buf, uint16(len(values)))
+				err = proto.WriteShort(buf, uint16(len(values)))
 				Expect(err).ToNot(HaveOccurred())
 
 				// write actual values
 				for _, v := range values {
-					err = writeBytes(buf, v)
+					err = proto.WriteBytes(buf, v)
 					Expect(err).ToNot(HaveOccurred())
 				}
 			})
@@ -228,19 +229,19 @@ var _ = Describe("readQuery", func() {
 
 			BeforeEach(func() {
 				// write flagSet
-				err = writeByte(buf, uint8(flagSet))
+				err = proto.WriteByte(buf, uint8(flagSet))
 				Expect(err).ToNot(HaveOccurred())
 
 				// write number of values
-				err = writeShort(buf, uint16(len(values)))
+				err = proto.WriteShort(buf, uint16(len(values)))
 				Expect(err).ToNot(HaveOccurred())
 
 				// write names and values
 				for i, v := range values {
-					err = writeString(buf, names[i])
+					err = proto.WriteString(buf, names[i])
 					Expect(err).ToNot(HaveOccurred())
 
-					err = writeBytes(buf, v)
+					err = proto.WriteBytes(buf, v)
 					Expect(err).ToNot(HaveOccurred())
 				}
 			})
@@ -284,7 +285,7 @@ var _ = Describe("readQuery", func() {
 
 			stmt := "TOO SHORT"
 
-			err = writeShort(buf, uint16(len(stmt)+10))
+			err = proto.WriteShort(buf, uint16(len(stmt)+10))
 			Expect(err).ToNot(HaveOccurred())
 
 			_, err = buf.Write([]byte(stmt))

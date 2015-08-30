@@ -2,61 +2,13 @@ package v3
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
 	"time"
-)
 
-type Consistency uint16
-
-const (
-	Any Consistency = iota
-	One
-	Two
-	Three
-	Quorum
-	All
-	LocalQuorum
-	EachQuorum
-	Serial
-	LocalSerial
-	LocalOne
-)
-
-func (c Consistency) String() string {
-	switch c {
-	case Any:
-		return "ANY"
-	case One:
-		return "ONE"
-	case Two:
-		return "TWO"
-	case Three:
-		return "THREE"
-	case Quorum:
-		return "QUORUM"
-	case All:
-		return "ALL"
-	case LocalQuorum:
-		return "LOCAL_QUORUM"
-	case EachQuorum:
-		return "EACH_QUORUM"
-	case Serial:
-		return "SERIAL"
-	case LocalSerial:
-		return "LOCAL_SERIAL"
-	case LocalOne:
-		return "LOCAL_SERIAL"
-	default:
-		return "UNKNOWN"
-	}
-}
-
-var (
-	errMaxLenExceeded = errors.New("Exceeds maximum length")
+	"github.com/st3v/fakesandra/cql/proto"
 )
 
 type queryFlagSet uint8
@@ -117,13 +69,13 @@ var queryFlagNames = map[queryFlag]string{
 
 type Query struct {
 	Statement         string
-	Consistency       Consistency
+	Consistency       proto.Consistency
 	flagSet           queryFlagSet
 	values            [][]byte
 	valueNames        []string
 	pageSize          int32
 	pagingState       []byte
-	serialConsistency Consistency
+	serialConsistency proto.Consistency
 	defaultTimestamp  time.Time
 }
 
@@ -153,7 +105,7 @@ func (q Query) PagingState() ([]byte, bool) {
 	return q.pagingState, q.flagSet.Contains(qryPagingState)
 }
 
-func (q Query) SerialConsistency() (Consistency, bool) {
+func (q Query) SerialConsistency() (proto.Consistency, bool) {
 	return q.serialConsistency, q.flagSet.Contains(qrySerialConsistency)
 }
 
@@ -200,11 +152,11 @@ func (q Query) String() string {
 
 func readQuery(r io.Reader, q *Query) error {
 	var err error
-	if q.Statement, err = readLongString(r); err != nil {
+	if q.Statement, err = proto.ReadLongString(r); err != nil {
 		return err
 	}
 
-	if err := readConsistency(r, &q.Consistency); err != nil {
+	if err := proto.ReadConsistency(r, &q.Consistency); err != nil {
 		return err
 	}
 
@@ -235,115 +187,6 @@ func readQuery(r io.Reader, q *Query) error {
 	return nil
 }
 
-func writeByte(w io.Writer, n uint8) error {
-	_, err := w.Write([]byte{n})
-	return err
-}
-
-func writeShort(w io.Writer, n uint16) error {
-	return binary.Write(w, binary.BigEndian, n)
-}
-
-func writeInt(w io.Writer, n int32) error {
-	return binary.Write(w, binary.BigEndian, n)
-}
-
-func writeLong(w io.Writer, n int64) error {
-	return binary.Write(w, binary.BigEndian, n)
-}
-
-func writeShortBytes(w io.Writer, b []byte) error {
-	if len(b) > 1<<16-1 {
-		return errMaxLenExceeded
-	}
-
-	if err := writeShort(w, uint16(len(b))); err != nil {
-		return err
-	}
-
-	_, err := w.Write(b)
-	return err
-}
-
-func writeBytes(w io.Writer, b []byte) error {
-	if len(b) > 1<<32-1 {
-		return errMaxLenExceeded
-	}
-
-	if err := writeInt(w, int32(len(b))); err != nil {
-		return err
-	}
-
-	_, err := w.Write(b)
-	return err
-}
-
-func writeString(w io.Writer, str string) error {
-	return writeShortBytes(w, []byte(str))
-}
-
-func writeLongString(w io.Writer, str string) error {
-	return writeBytes(w, []byte(str))
-}
-
-func readByte(r io.Reader, n *uint8) error {
-	return binary.Read(r, binary.BigEndian, n)
-}
-
-func readShort(r io.Reader, n *uint16) error {
-	return binary.Read(r, binary.BigEndian, n)
-}
-
-func readInt(r io.Reader, n *int32) error {
-	return binary.Read(r, binary.BigEndian, n)
-}
-
-func readLong(r io.Reader, n *int64) error {
-	return binary.Read(r, binary.BigEndian, n)
-}
-
-func readBytes(r io.Reader) ([]byte, error) {
-	var n int32
-	if err := readInt(r, &n); err != nil {
-		return []byte{}, err
-	}
-
-	b := make([]byte, n)
-	if _, err := io.ReadFull(r, b); err != nil {
-		return []byte{}, err
-	}
-
-	return b, nil
-}
-
-func readShortBytes(r io.Reader) ([]byte, error) {
-	var n uint16
-	if err := readShort(r, &n); err != nil {
-		return []byte{}, err
-	}
-
-	b := make([]byte, n)
-	if _, err := io.ReadFull(r, b); err != nil {
-		return []byte{}, err
-	}
-
-	return b, nil
-}
-
-func readString(r io.Reader) (string, error) {
-	str, err := readShortBytes(r)
-	return string(str), err
-}
-
-func readLongString(r io.Reader) (string, error) {
-	str, err := readBytes(r)
-	return string(str), err
-}
-
-func readConsistency(r io.Reader, c *Consistency) error {
-	return binary.Read(r, binary.BigEndian, c)
-}
-
 func readValues(r io.Reader, fs queryFlagSet) ([][]byte, []string, error) {
 	errResult := func(err error) ([][]byte, []string, error) {
 		return [][]byte{}, []string{}, err
@@ -354,7 +197,7 @@ func readValues(r io.Reader, fs queryFlagSet) ([][]byte, []string, error) {
 	}
 
 	var numValues uint16
-	if err := readShort(r, &numValues); err != nil {
+	if err := proto.ReadShort(r, &numValues); err != nil {
 		return errResult(nil)
 	}
 
@@ -364,12 +207,12 @@ func readValues(r io.Reader, fs queryFlagSet) ([][]byte, []string, error) {
 
 	for i := uint16(0); i < numValues; i++ {
 		if fs.Contains(qryNames) {
-			if names[i], err = readString(r); err != nil {
+			if names[i], err = proto.ReadString(r); err != nil {
 				return errResult(err)
 			}
 		}
 
-		if values[i], err = readBytes(r); err != nil {
+		if values[i], err = proto.ReadBytes(r); err != nil {
 			return errResult(err)
 		}
 	}
@@ -381,21 +224,21 @@ func readPageSize(r io.Reader, fs queryFlagSet, ps *int32) error {
 	if !fs.Contains(qryPageSize) {
 		return nil
 	}
-	return readInt(r, ps)
+	return proto.ReadInt(r, ps)
 }
 
 func readPagingState(r io.Reader, fs queryFlagSet) ([]byte, error) {
 	if !fs.Contains(qryPagingState) {
 		return []byte{}, nil
 	}
-	return readBytes(r)
+	return proto.ReadBytes(r)
 }
 
-func readSerialConsistency(r io.Reader, fs queryFlagSet, c *Consistency) error {
+func readSerialConsistency(r io.Reader, fs queryFlagSet, c *proto.Consistency) error {
 	if !fs.Contains(qrySerialConsistency) {
 		return nil
 	}
-	return readConsistency(r, c)
+	return proto.ReadConsistency(r, c)
 }
 
 func readDefaultTimestamp(r io.Reader, fs queryFlagSet) (time.Time, error) {
@@ -406,7 +249,7 @@ func readDefaultTimestamp(r io.Reader, fs queryFlagSet) (time.Time, error) {
 	}
 
 	var ms int64
-	if err := readLong(r, &ms); err != nil {
+	if err := proto.ReadLong(r, &ms); err != nil {
 		return ts, err
 	}
 
