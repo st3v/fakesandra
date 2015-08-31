@@ -2,30 +2,11 @@ package proto
 
 import "log"
 
-type startupHandler HandlerFunc
+var StartupHandler = FrameHandlerFunc(startupHandler)
 
-func (sh startupHandler) Handle(f Frame, w ResponseWriter) error {
-	return sh(f, w)
-}
-
-func StartupHandler() startupHandler {
-	return func(f Frame, w ResponseWriter) error {
-		log.Println("Received STARTUP request")
-		// return readyResponse(f.header.StreamID), nil
-		return nil
-	}
-}
-
-type queryHandler HandlerFunc
-
-func (qh queryHandler) Handle(f Frame, w ResponseWriter) error {
-	return qh(f, w)
-}
-
-func QueryHandler() queryHandler {
-	return func(f Frame, w ResponseWriter) error {
-		return f.QueryHandler()(f, w)
-	}
+func startupHandler(req Frame, rw ResponseWriter) {
+	log.Println("Received STARTUP request")
+	// return readyResponse(f.header.StreamID), nil
 }
 
 // import (

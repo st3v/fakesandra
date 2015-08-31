@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/st3v/fakesandra/cql"
+	"github.com/st3v/fakesandra"
 )
 
 func main() {
 	fmt.Println("Work in Progress!")
-	if err := cql.ListenAndServe(":9042"); err != nil {
+	if err := fakesandra.ListenAndServe(":9042"); err != nil {
 		panic(err)
 	}
 }

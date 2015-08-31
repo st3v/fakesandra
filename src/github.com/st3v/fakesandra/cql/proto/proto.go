@@ -5,6 +5,12 @@ import "io"
 // Version represents the version of a CQL frame.
 type Version uint8
 
+const (
+	Version1 Version = 1 + iota
+	Version2
+	Version3
+)
+
 type Consistency uint16
 
 const (
@@ -57,12 +63,16 @@ type Frame interface {
 	Request() bool
 	Response() bool
 	Opcode() Opcode
+
+	// TODO: make Body() return an io.Reader, i.e. the framer should not read
+	// the body but wrap the underlying readr into a io.LimitReader and attach it
+	// to the frame
 	Body() []byte
-	QueryHandler() HandlerFunc
+	// QueryHandler() HandlerFunc
 }
 
 type ResponseWriter interface {
-	Write(Frame) error
+	Write(response Frame) error
 }
 
 // Versioner identifies the right Framer that should be used to frame
@@ -77,14 +87,14 @@ type Framer interface {
 	Frame(in io.Reader) (Frame, error)
 }
 
-// Router routes frames to handler chains.
-type Router interface {
-	Route(request Frame) (Handler, error)
+// FrameHandler handles a CQL request frame. Might write replies to the
+// response writer.
+type FrameHandler interface {
+	ServeCQL(request Frame, rw ResponseWriter)
 }
 
-// Handler handles a CQL frame. Might write replies to the response writer.
-type Handler interface {
-	Handle(f Frame, rw ResponseWriter) error
-}
+type FrameHandlerFunc func(request Frame, rw ResponseWriter)
 
-type HandlerFunc func(f Frame, rw ResponseWriter) error
+func (handlerFn FrameHandlerFunc) ServeCQL(request Frame, rw ResponseWriter) {
+	handlerFn(request, rw)
+}

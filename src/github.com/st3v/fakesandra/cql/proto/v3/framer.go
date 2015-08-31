@@ -29,10 +29,6 @@ type frame struct {
 	body       []byte
 }
 
-func (f *frame) QueryHandler() proto.HandlerFunc {
-	return queryHandler
-}
-
 func (f *frame) Version() proto.Version {
 	return proto.Version(Version)
 }

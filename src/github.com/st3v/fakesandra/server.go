@@ -1,4 +1,4 @@
-package cql
+package fakesandra
 
 import (
 	"io"
@@ -9,21 +9,36 @@ import (
 	"github.com/st3v/fakesandra/cql/proto/v3"
 )
 
+func ListenAndServe(addr string) error {
+	server := NewServer(addr)
+	return server.ListenAndServe()
+}
+
 type server struct {
 	addr      string
 	versioner proto.Versioner
-	router    proto.Router
+	handler   proto.FrameHandler
 }
 
-func NewServer(addr string) *server {
+var DefaultVersioner = func() proto.Versioner {
 	versioner := proto.NewVersioner()
-	versioner.SetRequestFramer(3, v3.RequestFramer())
-	versioner.SetResponseFramer(3, v3.ResponseFramer())
+	versioner.SetRequestFramer(proto.Version3, v3.RequestFramer())
+	// TODO: Do we really need response framers? We are a server after all.
+	versioner.SetResponseFramer(proto.Version3, v3.ResponseFramer())
+	return versioner
+}()
 
+var DefaultHandler = func() proto.FrameHandler {
+	vmux := proto.NewVersionMux()
+	vmux.Handle(3, v3.DefaultMux)
+	return vmux
+}()
+
+func NewServer(addr string) *server {
 	return &server{
 		addr:      addr,
-		versioner: versioner,
-		router:    proto.DefaultRouter(),
+		versioner: DefaultVersioner,
+		handler:   DefaultHandler,
 	}
 }
 
@@ -90,15 +105,12 @@ func (s *server) ServeConnection(c net.Conn) {
 		// and the interceptor could hijack the response on its way up the
 		// chain.
 
-		handler, err := s.router.Route(frame)
-		if err != nil {
-			log.Printf("Error routing request: %s", err)
-			return
-		}
+		// handler, err := s.router.Route(frame)
+		// if err != nil {
+		// 	log.Printf("Error routing request: %s", err)
+		// 	return
+		// }
 
-		if err := handler.Handle(frame, proto.FrameWriter(c)); err != nil {
-			log.Printf("Error handling request: %s", err)
-			return
-		}
+		s.handler.ServeCQL(frame, proto.FrameWriter(c))
 	}
 }
