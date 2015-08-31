@@ -1,6 +1,7 @@
 package fakesandra
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -9,8 +10,10 @@ import (
 	"github.com/st3v/fakesandra/cql/proto/v3"
 )
 
-func ListenAndServe(addr string) error {
-	server := NewServer(addr)
+const DefaultPort = 9042
+
+func ListenAndServe(addr string, handler proto.FrameHandler) error {
+	server := NewServer(addr, handler)
 	return server.ListenAndServe()
 }
 
@@ -34,18 +37,22 @@ var DefaultHandler = func() proto.FrameHandler {
 	return vmux
 }()
 
-func NewServer(addr string) *server {
+func NewServer(addr string, handler proto.FrameHandler) *server {
+	if handler == nil {
+		handler = DefaultHandler
+	}
+
 	return &server{
 		addr:      addr,
 		versioner: DefaultVersioner,
-		handler:   DefaultHandler,
+		handler:   handler,
 	}
 }
 
 func (s *server) ListenAndServe() error {
 	addr := s.addr
 	if addr == "" {
-		addr = ":9042"
+		addr = fmt.Sprintf(":%d", DefaultPort)
 	}
 
 	ln, err := net.Listen("tcp", addr)
@@ -71,7 +78,11 @@ func (s *server) Serve(l net.Listener) error {
 
 func (s *server) ServeConnection(c net.Conn) {
 	defer c.Close()
+
+	log.Println("Serving new connection ...")
+
 	for {
+		// TODO: Handle timeouts
 		framer, err := s.versioner.Version(c)
 		if err == io.EOF {
 			log.Println("Connection closed by client")
@@ -86,30 +97,6 @@ func (s *server) ServeConnection(c net.Conn) {
 			log.Printf("Error framing request: %s", err)
 			return
 		}
-
-		// Forget about router, use handler chains instead
-		// Each handler checks the Frame's opcode and either
-		// handles the frame or passes it on to the next handler
-		// down the chain
-		//
-		// This way the caller of ListenAndServe could pass us another
-		// handler chain that we could prepend to the default handlers
-		// for example a Proxy and Interceptor.
-		//
-		// Proxy -> Interceptor -> [ QueryHandler -> PrepareHandler -> ... ]
-		//
-		// Instead of writing the response directly to the ResponseWriter,
-		// the HandlerFunc could just pass the response frame upstream
-		// through the handler chain on the way out. The server would then
-		// take care of writing the frame. That way handlers like the proxy
-		// and the interceptor could hijack the response on its way up the
-		// chain.
-
-		// handler, err := s.router.Route(frame)
-		// if err != nil {
-		// 	log.Printf("Error routing request: %s", err)
-		// 	return
-		// }
 
 		s.handler.ServeCQL(frame, proto.FrameWriter(c))
 	}

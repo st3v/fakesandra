@@ -2,12 +2,16 @@ package v3
 
 import (
 	"bytes"
-	"log"
 
 	"github.com/st3v/fakesandra/cql/proto"
 )
 
-var StartupHandler = proto.StartupHandler
+var StartupHandler = proto.FrameHandlerFunc(startupHandler)
+
+func startupHandler(req proto.Frame, rw proto.ResponseWriter) {
+	// log.Println("Received STARTUP request")
+	rw.WriteFrame(ReadyResponse(req))
+}
 
 var QueryHandler = proto.FrameHandlerFunc(queryHandler)
 
@@ -18,7 +22,6 @@ func queryHandler(req proto.Frame, rw proto.ResponseWriter) {
 		return
 	}
 
-	log.Printf("Received QUERY request: %s", qry)
-
-	// return voidResponse(f.header.StreamID), nil
+	// log.Printf("Received QUERY request: %s", qry)
+	rw.WriteFrame(ResultVoidResponse(req))
 }

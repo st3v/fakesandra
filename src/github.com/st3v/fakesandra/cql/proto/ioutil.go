@@ -134,7 +134,7 @@ func FrameWriter(w io.Writer) *frameWriter {
 	return &frameWriter{w}
 }
 
-func (fw *frameWriter) Write(f Frame) error {
+func (fw *frameWriter) WriteFrame(f Frame) error {
 	_, err := f.WriteTo(fw.out)
 	return err
 }

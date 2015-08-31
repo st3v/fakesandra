@@ -1,6 +1,9 @@
 package proto
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 // Version represents the version of a CQL frame.
 type Version uint8
@@ -58,21 +61,22 @@ func (c Consistency) String() string {
 
 // Represents a CQL frame.
 type Frame interface {
+	fmt.Stringer
 	io.WriterTo
 	Version() Version
 	Request() bool
 	Response() bool
 	Opcode() Opcode
+	StreamID() uint16
 
 	// TODO: make Body() return an io.Reader, i.e. the framer should not read
 	// the body but wrap the underlying readr into a io.LimitReader and attach it
 	// to the frame
 	Body() []byte
-	// QueryHandler() HandlerFunc
 }
 
 type ResponseWriter interface {
-	Write(response Frame) error
+	WriteFrame(response Frame) error
 }
 
 // Versioner identifies the right Framer that should be used to frame

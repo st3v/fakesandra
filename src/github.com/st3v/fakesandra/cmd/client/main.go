@@ -35,5 +35,7 @@ func main() {
 		if err := qry.Exec(); err != nil {
 			log.Printf("Error executing query: %s\n", err.Error())
 		}
+
+		session.Close()
 	}
 }

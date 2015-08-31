@@ -1,6 +1,7 @@
 package v3
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/st3v/fakesandra/cql/proto"
@@ -45,8 +46,27 @@ func (f *frame) Opcode() proto.Opcode {
 	return f.header.Opcode
 }
 
+func (f *frame) StreamID() uint16 {
+	return f.header.StreamID
+}
+
 func (f *frame) Body() []byte {
 	return f.body
+}
+
+func (f *frame) String() string {
+	direction := "Response"
+	if f.Request() {
+		direction = "Request"
+	}
+
+	return fmt.Sprintf(
+		`Frame [Version: %d, Op: %s, Dir: %s, StreamID: %d]`,
+		f.Version(),
+		f.Opcode(),
+		direction,
+		f.StreamID(),
+	)
 }
 
 func (f *frame) WriteTo(w io.Writer) (int64, error) {
