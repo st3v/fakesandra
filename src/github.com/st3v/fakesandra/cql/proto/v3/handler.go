@@ -6,22 +6,47 @@ import (
 	"github.com/st3v/fakesandra/cql/proto"
 )
 
-var StartupHandler = proto.FrameHandlerFunc(startupHandler)
+var StartupFrameHandler = proto.FrameHandlerFunc(startupFrameHandler)
 
-func startupHandler(req proto.Frame, rw proto.ResponseWriter) {
+var QueryFrameHandler = NewQueryFrameHandler(ResultVoidHandler)
+
+var ResultVoidHandler = proto.QueryHandlerFunc(resultVoidHandler)
+
+func resultVoidHandler(qry string, req proto.Frame, rw proto.ResponseWriter) {
+	rw.WriteFrame(ResultVoidResponse(req))
+}
+
+func startupFrameHandler(req proto.Frame, rw proto.ResponseWriter) {
 	// log.Println("Received STARTUP request")
 	rw.WriteFrame(ReadyResponse(req))
 }
 
-var QueryHandler = proto.FrameHandlerFunc(queryHandler)
+func NewQueryFrameHandler(handler proto.QueryHandler) *queryFrameHandler {
+	return &queryFrameHandler{
+		queryHandler: handler,
+	}
+}
 
-func queryHandler(req proto.Frame, rw proto.ResponseWriter) {
+type queryFrameHandler struct {
+	queryHandler proto.QueryHandler
+}
+
+func (qfm *queryFrameHandler) ServeCQL(req proto.Frame, rw proto.ResponseWriter) {
 	var qry Query
 	if err := readQuery(bytes.NewReader(req.Body()), &qry); err != nil {
 		// TODO: write error to ResponseWriter
 		return
 	}
 
-	// log.Printf("Received QUERY request: %s", qry)
-	rw.WriteFrame(ResultVoidResponse(req))
+	qfm.queryHandler.ServeQuery(qry.TrimmedStatement(), req, rw)
+}
+
+func (qfm *queryFrameHandler) Prepend(handler proto.QueryHandler) {
+	next := qfm.queryHandler
+	qfm.queryHandler = proto.QueryHandlerFunc(
+		func(qry string, req proto.Frame, rw proto.ResponseWriter) {
+			handler.ServeQuery(qry, req, rw)
+			next.ServeQuery(qry, req, rw)
+		},
+	)
 }

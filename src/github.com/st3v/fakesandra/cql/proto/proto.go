@@ -14,6 +14,12 @@ const (
 	Version3
 )
 
+var Versions = []Version{
+	Version1,
+	Version2,
+	Version3,
+}
+
 type Consistency uint16
 
 const (
@@ -75,6 +81,14 @@ type Frame interface {
 	Body() []byte
 }
 
+// TODO: Pull the pipline related stuff below out of the proto package and
+// put it into top-level packages for versioning, framing, frame handlers,
+// and query handlers. That way it will be easier to write version agnostic
+// handlers and middleware.
+//
+// In the end proto should only contain low-level code related to reading,
+// parsing and writing frames, queries, etc.
+
 type ResponseWriter interface {
 	WriteFrame(response Frame) error
 }
@@ -93,12 +107,29 @@ type Framer interface {
 
 // FrameHandler handles a CQL request frame. Might write replies to the
 // response writer.
+// TODO: Rename ServeCQL to ServeFrame, for clarity reasons
 type FrameHandler interface {
 	ServeCQL(request Frame, rw ResponseWriter)
 }
 
 type FrameHandlerFunc func(request Frame, rw ResponseWriter)
 
-func (handlerFn FrameHandlerFunc) ServeCQL(request Frame, rw ResponseWriter) {
-	handlerFn(request, rw)
+func (fn FrameHandlerFunc) ServeCQL(request Frame, rw ResponseWriter) {
+	fn(request, rw)
+}
+
+type QueryFrameHandler interface {
+	FrameHandler
+	Prepend(handler QueryHandler)
+}
+
+// TODO: instead of passing a string, create interface for query
+type QueryHandler interface {
+	ServeQuery(query string, request Frame, rw ResponseWriter)
+}
+
+type QueryHandlerFunc func(query string, request Frame, rw ResponseWriter)
+
+func (fn QueryHandlerFunc) ServeQuery(q string, r Frame, rw ResponseWriter) {
+	fn(q, r, rw)
 }

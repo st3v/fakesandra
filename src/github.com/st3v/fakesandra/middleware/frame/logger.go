@@ -1,4 +1,4 @@
-package middleware
+package frame
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"github.com/st3v/fakesandra/cql/proto"
 )
 
-func FrameLogger(log func(...interface{}), next proto.FrameHandler) proto.FrameHandler {
+func Logger(log func(...interface{}), next proto.FrameHandler) proto.FrameHandler {
 	return proto.FrameHandlerFunc(func(req proto.Frame, rw proto.ResponseWriter) {
 		log(fmt.Sprintf("Read: %s", req))
 		next.ServeCQL(req, &responseLogger{rw, log})

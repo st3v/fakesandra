@@ -31,10 +31,38 @@ var DefaultVersioner = func() proto.Versioner {
 	return versioner
 }()
 
-var DefaultHandler = func() proto.FrameHandler {
-	vmux := proto.NewVersionMux()
-	vmux.Handle(3, v3.DefaultMux)
-	return vmux
+// TODO: Refactor. There must be a better way of doing this.
+// Maybe we shouldn't have a version muxer but only a single
+// opcode muxer. An opcode handler could easily figure out
+// the version of the frame and based on that use the proper
+// protocol to parse queries, send responses etc. That way
+// we would have only one handler for query frames and it would
+// be way easier to attach middleware to that.
+func HandleQuery(qryHandler proto.QueryHandler) {
+	for _, v := range proto.Versions {
+		opmux, found := DefaultHandler.Handler(v)
+		if opmux == nil || !found {
+			continue
+		}
+
+		frameHandler, found := opmux.Handler(proto.OpQuery)
+		if frameHandler == nil || !found {
+			continue
+		}
+
+		qfm, ok := frameHandler.(proto.QueryFrameHandler)
+		if !ok {
+			continue
+		}
+
+		qfm.Prepend(qryHandler)
+	}
+}
+
+var DefaultHandler = func() (vmux *proto.VersionMux) {
+	vmux = proto.NewVersionMux()
+	vmux.Handle(proto.Version3, v3.DefaultMux)
+	return
 }()
 
 func NewServer(addr string, handler proto.FrameHandler) *server {
